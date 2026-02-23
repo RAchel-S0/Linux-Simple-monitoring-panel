@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linux简单监控</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <style>
+        [v-cloak] {
+            display: none;
+        }
+
+        body {
+            background-color: #0f172a;
+            color: #e2e8f0;
+        }
+
+        /* Tailwind slate-900 / slate-200 */
+    </style>
+</head>
+
+<body class="antialiased font-sans flex items-center justify-center min-h-screen">
+
+    <div id="app" v-cloak class="w-full h-full min-h-screen flex items-center justify-center">
+
+        <!-- Login Modal -->
+        <div v-if="!isAuthenticated"
+            class="w-full max-w-md bg-slate-800 p-8 rounded-2xl shadow-2xl border border-slate-700">
+            <h2 class="text-3xl font-bold mb-6 text-center text-white">Linux简单监控</h2>
+            <form @submit.prevent="login" class="space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300">账号</label>
+                    <input type="text" v-model="loginForm.username" required
+                        class="mt-1 block w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-300">密码</label>
+                    <input type="password" v-model="loginForm.password" required
+                        class="mt-1 block w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+                </div>
+                <div v-if="loginError" class="text-red-400 text-sm mt-2">{{ loginError }}</div>
+                <button type="submit"
+                    class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white font-medium shadow-lg hover:shadow-indigo-500/30 transition duration-200">
+                    安全登录
+                </button>
+            </form>
+        </div>
+
+        <!-- Main Dashboard -->
+        <div v-else class="w-full min-h-screen bg-slate-900 flex flex-col">
+            <!-- Top Nav -->
+            <nav class="bg-slate-800 border-b border-slate-700 px-6 py-4 flex justify-between items-center shadow-md">
+                <h1 class="text-xl font-bold text-white flex items-center gap-2">
+                    <svg class="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01">
+                        </path>
+                    </svg>
+                    Linux简单监控
+                </h1>
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="flex items-center gap-2">
+                        <select v-model="timeRange" @change="fetchMetricsHistory"
+                            class="bg-slate-900 border border-slate-700 text-sm rounded focus:ring-indigo-500 focus:border-indigo-500 block p-2 text-white">
+                            <option value="15">过去 15 分钟</option>
+                            <option value="60">过去 1 小时</option>
+                            <option value="360">过去 6 小时</option>
+                            <option value="1440">过去 24 小时</option>
+                            <option value="custom">📅 自定义时间段</option>
+                        </select>
+                        <div v-if="timeRange === 'custom'" class="flex items-center gap-2">
+                            <input type="datetime-local" v-model="customTime.start" style="color-scheme: dark;"
+                                class="bg-slate-900 border border-slate-700 text-sm rounded p-1.5 text-white focus:outline-none focus:border-indigo-500">
+                            <span class="text-slate-500">-</span>
+                            <input type="datetime-local" v-model="customTime.end" style="color-scheme: dark;"
+                                class="bg-slate-900 border border-slate-700 text-sm rounded p-1.5 text-white focus:outline-none focus:border-indigo-500">
+                            <button @click="fetchMetricsHistory"
+                                class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 rounded text-sm text-white transition">查询</button>
+                        </div>
+                        <button @click="clearHistory"
+                            class="px-3 py-2 bg-rose-900/40 hover:bg-rose-900/80 text-rose-300 rounded text-sm transition"
+                            title="强制清空 SQLite 中的历史指标记录">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
+                                </path>
+                            </svg>
+                        </button>
+                    </div>
+                    <button @click="openPwdModal"
+                        class="px-4 py-2 bg-indigo-700 hover:bg-indigo-600 rounded text-sm text-white transition">
+                        修改密码
+                    </button>
+                    <button @click="logout"
+                        class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-white transition">
+                        安全退出
+                    </button>
+                </div>
+            </nav>
+
+            <!-- Content -->
+            <div class="p-6 flex-grow grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                <!-- CPU Chart -->
+                <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg">
+                    <h3 class="text-slate-300 font-medium mb-2">核心处理器使用率 (CPU %)</h3>
+                    <div id="cpuChart" class="w-full h-64"></div>
+                </div>
+
+                <!-- Memory Chart -->
+                <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg">
+                    <h3 class="text-slate-300 font-medium mb-2">物理内存消耗 (RAM MB)</h3>
+                    <div id="memChart" class="w-full h-64"></div>
+                </div>
+
+                <!-- Network Chart -->
+                <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg lg:col-span-2">
+                    <h3 class="text-slate-300 font-medium mb-2">全网卡总流量 (Bytes/s)</h3>
+                    <div id="netChart" class="w-full h-64"></div>
+                </div>
+
+                <!-- Advanced Network Stats -->
+                <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg lg:col-span-2">
+                    <h3 class="text-slate-300 font-medium mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z">
+                            </path>
+                        </svg>
+                        网络状态
+                    </h3>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- TCP Connections Map -->
+                        <div>
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm text-slate-400">当前总连接数</span>
+                                <span class="font-mono text-xl text-white">{{ networkConnections.total_connections || 0
+                                    }}</span>
+                            </div>
+                            <div class="flex justify-between items-center mb-4">
+                                <span class="text-sm text-slate-400">动态连接数 (每 3 秒)</span>
+                                <div class="flex gap-3">
+                                    <span class="text-emerald-400 font-mono text-sm">+{{
+                                        networkConnections.rate?.new_per_3s || 0 }}</span>
+                                    <span class="text-rose-400 font-mono text-sm">-{{
+                                        networkConnections.rate?.closed_per_3s || 0 }}</span>
+                                </div>
+                            </div>
+                            <div class="space-y-1">
+                                <div v-for="(val, key) in networkConnections.status_counts" :key="key"
+                                    class="flex justify-between items-center bg-slate-900/50 px-3 py-1.5 rounded text-sm">
+                                    <span class="text-slate-400 capitalize">{{ translateTcpStatus(key) }}</span>
+                                    <span class="text-white font-mono">{{ val }}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Interfaces List -->
+                        <div class="overflow-y-auto max-h-64 pr-2 custom-scrollbar">
+                            <div v-for="nic in networkInterfaces" :key="nic.name"
+                                class="mb-3 bg-slate-900/50 p-3 rounded border border-slate-700/50">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="font-medium text-indigo-300">{{ nic.name }}</span>
+                                    <span
+                                        :class="nic.is_up ? 'bg-emerald-900 border-emerald-500 text-emerald-300' : 'bg-slate-800 border-slate-600 text-slate-400'"
+                                        class="text-[10px] px-2 py-0.5 rounded-full border">
+                                        {{ nic.is_up ? 'UP' : 'DOWN' }}
+                                    </span>
+                                </div>
+                                <div class="text-xs text-slate-400 mt-2 space-y-1 font-mono">
+                                    <div v-if="nic.mac" class="flex"><span class="w-10 text-slate-500">MAC</span> {{
+                                        nic.mac }}</div>
+                                    <div v-for="ip in nic.ipv4" class="flex"><span
+                                            class="w-10 text-slate-500">IPv4</span> {{ ip }}</div>
+                                    <div v-for="ip in nic.ipv6" class="flex"><span
+                                            class="w-10 text-slate-500">IPv6</span> {{ ip }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Nginx Log Analyzer -->
+                <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg lg:col-span-2">
+                    <div class="flex flex-wrap justify-between items-center mb-4">
+                        <h3 class="text-slate-300 font-medium flex items-center gap-2">
+                            <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                                </path>
+                            </svg>
+                            Nginx 运行状态/日志分析
+                        </h3>
+                        <!-- Status indicator -->
+                        <div class="flex items-center gap-2">
+                            <span :class="nginxStatus.running ? 'bg-emerald-500' : 'bg-rose-500'"
+                                class="w-2.5 h-2.5 rounded-full animate-pulse"></span>
+                            <span class="text-sm font-mono"
+                                :class="nginxStatus.running ? 'text-emerald-400' : 'text-rose-400'">
+                                {{ nginxStatus.running ? `运行中 (PID: ${nginxStatus.pid})` : '已停止' }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Configuration Form -->
+                        <div class="lg:col-span-1 space-y-4">
+                            <div>
+                                <label class="block text-xs text-slate-400 mb-1">access.log 绝对路径</label>
+                                <div class="flex gap-2">
+                                    <input type="text" v-model="nginxConfig.log_path"
+                                        class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none flex-grow">
+                                    <button @click="saveNginxConfig"
+                                        class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-sm transition shrink-0">
+                                        保存
+                                    </button>
+                                </div>
+                            </div>
+                            <button @click="analyzeNginxLogs" :disabled="nginxLoading"
+                                class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded text-sm transition flex items-center justify-center gap-2">
+                                <svg v-if="nginxLoading" class="animate-spin h-4 w-4 text-white" fill="none"
+                                    viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                        stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor"
+                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                    </path>
+                                </svg>
+                                {{ nginxLoading ? '正在抽样分析...' : 'Top IP 与地理查询' }}
+                            </button>
+                            <p v-if="nginxLogResult.error" class="text-rose-400 text-xs">{{ nginxLogResult.error }}</p>
+                            <p v-if="nginxLogResult.total_analyzed_lines > 0" class="text-slate-400 text-xs">
+                                成功抽取并分析了文件末尾 {{ nginxLogResult.total_analyzed_lines }} 条记录。
+                            </p>
+                        </div>
+
+                        <!-- Top IPs Table -->
+                        <div class="lg:col-span-2 overflow-x-auto">
+                            <div class="max-h-64 overflow-y-auto custom-scrollbar">
+                                <table class="w-full text-sm text-left text-slate-300">
+                                    <thead class="text-xs text-slate-400 bg-slate-900/50 sticky top-0">
+                                        <tr>
+                                            <th class="px-4 py-2 font-medium">IP 地址</th>
+                                            <th class="px-4 py-2 font-medium">访问次数</th>
+                                            <th class="px-4 py-2 font-medium">地理位置</th>
+                                            <th class="px-4 py-2 font-medium">运营商 (ISP)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-if="nginxLogResult.top_ips?.length === 0"
+                                            class="border-b border-slate-700/50">
+                                            <td colspan="4" class="px-4 py-6 text-center text-slate-500">
+                                                尚无分析数据。请确认访问日志路径无误后，点击左侧开始解析按钮。</td>
+                                        </tr>
+                                        <tr v-for="row in nginxLogResult.top_ips" :key="row.ip"
+                                            class="border-b border-slate-700/50 hover:bg-slate-700/30">
+                                            <td class="px-4 py-2 font-mono text-indigo-300">{{ row.ip }}</td>
+                                            <td class="px-4 py-2">{{ row.count }}</td>
+                                            <td class="px-4 py-2 text-xs">
+                                                <span v-if="row.country !== 'Unknown'" class="mr-1">🌍</span>
+                                                {{ row.country === 'Unknown' ? '未知' : row.country }}<span
+                                                    v-if="row.city && row.city !== 'Unknown'">，{{
+                                                    row.city }}</span>
+                                            </td>
+                                            <td class="px-4 py-2 text-xs truncate max-w-[120px]" :title="row.isp">{{
+                                                row.isp }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Process Manager -->
+                <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg lg:col-span-2">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-slate-300 font-medium flex items-center gap-2">
+                            <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z">
+                                </path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                            系统进程管理 (按物理内存倒序 Top 100)
+                        </h3>
+                        <button @click="fetchProcesses" class="p-2 text-slate-400 hover:text-white transition">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                                </path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div
+                        class="overflow-x-auto max-h-[400px] overflow-y-auto custom-scrollbar border border-slate-700 rounded-lg">
+                        <table class="w-full text-sm text-left text-slate-300">
+                            <thead class="text-xs text-slate-400 bg-slate-900 sticky top-0 z-10">
+                                <tr>
+                                    <th class="px-4 py-3 font-medium cursor-pointer">PID</th>
+                                    <th class="px-4 py-3 font-medium">进程名称 / 服务备注</th>
+                                    <th class="px-4 py-3 font-medium">用户</th>
+                                    <th class="px-4 py-3 font-medium">监听端口</th>
+                                    <th class="px-4 py-3 font-medium">CPU(%)</th>
+                                    <th class="px-4 py-3 font-medium">内存(MB)</th>
+                                    <th class="px-4 py-3 font-medium text-right">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="proc in processes" :key="proc.pid"
+                                    class="border-b border-slate-700/50 hover:bg-slate-700/30 transition">
+                                    <td class="px-4 py-2 font-mono text-slate-400">{{ proc.pid }}</td>
+                                    <td class="px-4 py-2">
+                                        <div class="font-medium text-indigo-300">{{ proc.name }}</div>
+                                        <div v-if="proc.description" class="text-[10px] text-emerald-400/80">{{
+                                            proc.description }}</div>
+                                    </td>
+                                    <td class="px-4 py-2 text-xs truncate max-w-[100px]">{{ proc.user }}</td>
+                                    <td class="px-4 py-2 font-mono text-xs text-sky-400">{{ proc.ports.join(', ') || '-'
+                                        }}</td>
+                                    <td class="px-4 py-2"><span
+                                            :class="proc.cpu_percent > 50 ? 'text-rose-400 font-bold' : ''">{{
+                                            proc.cpu_percent.toFixed(1) }}</span></td>
+                                    <td class="px-4 py-2"><span
+                                            :class="proc.memory_mb > 500 ? 'text-rose-400 font-bold' : ''">{{
+                                            proc.memory_mb }}</span></td>
+                                    <td class="px-4 py-2 text-right">
+                                        <button @click="killProcess(proc.pid, proc.name)"
+                                            class="px-3 py-1 bg-red-500/10 hover:bg-red-500/30 border border-red-500/20 text-red-400 hover:text-red-300 rounded transition text-xs font-semibold shadow-sm">
+                                            强行结束
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Docker & File Manager Row -->
+                <div class="lg:col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                    <!-- Docker Monitor -->
+                    <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-slate-300 font-medium flex items-center gap-2">
+                                <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10">
+                                    </path>
+                                </svg>
+                                Docker 容器状态
+                            </h3>
+                            <button @click="fetchDocker" class="text-slate-400 hover:text-white transition">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                                    </path>
+                                </svg>
+                            </button>
+                        </div>
+                        <div v-if="!dockerInfo.installed" class="text-slate-500 text-sm text-center py-6">
+                            尚未在系统中探测到 Docker 引擎核心或当前账户无权限存取。
+                        </div>
+                        <div v-else-if="dockerInfo.containers.length === 0"
+                            class="text-slate-500 text-sm text-center py-6">
+                            没有任何正常挂载记录中的容器实例。
+                        </div>
+                        <div v-else class="space-y-3 overflow-y-auto max-h-64 custom-scrollbar">
+                            <div v-for="c in dockerInfo.containers" :key="c.ID"
+                                class="bg-slate-900 border border-slate-700 rounded p-3 flex justify-between items-center">
+                                <div>
+                                    <div class="text-indigo-300 font-medium text-sm">{{ c.Names }}</div>
+                                    <div class="text-xs text-slate-400 font-mono mt-1">{{ c.Image }}</div>
+                                </div>
+                                <div class="text-right">
+                                    <span
+                                        :class="c.State === 'running' ? 'bg-emerald-900 text-emerald-300' : 'bg-slate-800 text-slate-400'"
+                                        class="text-[10px] px-2 py-0.5 rounded-full border border-slate-700 uppercase">
+                                        {{ c.State }}
+                                    </span>
+                                    <div class="text-xs text-slate-500 mt-1">{{ c.Status }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- File Manager -->
+                    <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg flex flex-col h-full">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-slate-300 font-medium flex items-center gap-2">
+                                <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z">
+                                    </path>
+                                </svg>
+                                Web 文件管理树
+                            </h3>
+                            <button @click="fetchFiles(currentPath.value || '/')"
+                                class="text-slate-400 hover:text-white transition group relative">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                                    </path>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div class="flex gap-2 mb-3">
+                            <button @click="fetchFiles(parentPath)"
+                                class="px-2 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-300 transition"
+                                title="返回上级目录">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                                </svg>
+                            </button>
+                            <input type="text" v-model="currentPath" @keyup.enter="fetchFiles(currentPath)"
+                                class="w-full bg-slate-900 border border-slate-700 text-slate-300 text-sm rounded px-3 py-1 focus:outline-none focus:border-indigo-500">
+
+                            <button @click="$refs.fileUploadInput.click()"
+                                class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-sm transition font-medium flex-shrink-0 flex items-center gap-1"
+                                title="上传文件到当前目录">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                                </svg>
+                                <span>上传</span>
+                            </button>
+                            <input type="file" ref="fileUploadInput" @change="handleFileUpload" class="hidden">
+                        </div>
+
+                        <div
+                            class="flex-grow overflow-y-auto max-h-[300px] border border-slate-700 bg-slate-900 rounded custom-scrollbar">
+                            <div v-if="fileError" class="p-4 text-center text-rose-400 text-sm">{{ fileError }}</div>
+                            <ul v-else class="text-sm">
+                                <li v-for="f in fileItems" :key="f.name"
+                                    class="flex justify-between items-center px-4 py-2 border-b border-slate-800 hover:bg-slate-800/80 transition group">
+                                    <div class="flex items-center gap-2 cursor-pointer truncate mr-4 max-w-[60%]"
+                                        @click="f.is_dir ? fetchFiles(f.absolute_path) : null">
+                                        <svg v-if="f.is_dir" class="w-4 h-4 text-indigo-400 flex-shrink-0"
+                                            fill="currentColor" viewBox="0 0 20 20">
+                                            <path
+                                                d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z">
+                                            </path>
+                                        </svg>
+                                        <svg v-else class="w-4 h-4 text-slate-400 flex-shrink-0" fill="none"
+                                            stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z">
+                                            </path>
+                                        </svg>
+                                        <span :class="f.is_dir ? 'text-indigo-300' : 'text-slate-300'"
+                                            class="truncate">{{ f.name }}</span>
+                                    </div>
+                                    <div class="flex items-center gap-4 text-xs">
+                                        <span v-if="!f.is_dir" class="text-slate-500 font-mono">{{ (f.size /
+                                            1024).toFixed(1) }} KB</span>
+                                        <div class="opacity-0 group-hover:opacity-100 transition flex gap-2">
+                                            <button v-if="!f.is_dir" @click="downloadFile(f.absolute_path)"
+                                                class="text-emerald-400 hover:text-emerald-300" title="下载">下载</button>
+                                            <button @click="deleteFile(f.absolute_path, f.is_dir)"
+                                                class="text-rose-400 hover:text-rose-300" title="删除">删除</button>
+                                        </div>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue
+
+        createApp({
+            setup() {
+                const isAuthenticated = ref(false)
+                const loginForm = ref({ username: '', password: '' })
+                const loginError = ref('')
+                const timeRange = ref(60)
+                const customTime = ref({ start: '', end: '' })
+                const fileUploadInput = ref(null)
+
+                const showPwdModal = ref(false)
+                const pwdForm = ref({ old: '', new1: '', new2: '' })
+                const pwdMessage = ref(null)
+                const isDefaultPassword = ref(false)
+
+                const networkInterfaces = ref([])
+                const networkConnections = ref({ status_counts: {}, total_connections: 0, rate: { new_per_3s: 0, closed_per_3s: 0 } })
+
+                const translateTcpStatus = (status) => {
+                    const map = {
+                        'LISTEN': '监听中 (LISTEN)',
+                        'ESTABLISHED': '已建立 (ESTAB)',
+                        'TIME_WAIT': '等待释放 (TIME_WAIT)',
+                        'CLOSE_WAIT': '等待关闭 (CLOSE_WAIT)',
+                        'SYN_SENT': '请求发送 (SYN_SENT)',
+                        'SYN_RECV': '请求接收 (SYN_RECV)',
+                        'FIN_WAIT1': '终止等待1 (FIN_W1)',
+                        'FIN_WAIT2': '终止等待2 (FIN_W2)',
+                        'NONE': '无状态 (NONE)',
+                        'LAST_ACK': '确认终止 (LAST_ACK)',
+                        'CLOSED': '已静默 (CLOSED)'
+                    };
+                    return map[status.toUpperCase()] || status;
+                }
+
+                const nginxStatus = ref({ running: false, pid: null, uptime_seconds: 0 })
+                const nginxConfig = ref({ log_path: '/var/log/nginx/access.log' })
+                const nginxLogResult = ref({ error: null, total_analyzed_lines: 0, top_ips: [] })
+                const nginxLoading = ref(false)
+
+                const processes = ref([])
+
+                const dockerInfo = ref({ installed: false, containers: [] })
+                const currentPath = ref(navigator.platform.indexOf('Win') > -1 ? 'C:\\' : '/')
+                const parentPath = ref('/')
+                const fileItems = ref([])
+                const fileError = ref(null)
+
+                let cpuChartInstance = null
+                let memChartInstance = null
+                let netChartInstance = null
+                let intervalId = null
+
+                const checkToken = async () => {
+                    const token = localStorage.getItem('access_token')
+                    if (!token) return
+
+                    try {
+                        const res = await fetch('/api/verify_token', {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        })
+                        if (res.ok) {
+                            isAuthenticated.value = true
+                            const data = await res.json()
+                            isDefaultPassword.value = data.is_default_password
+                            if (isDefaultPassword.value) {
+                                setTimeout(() => {
+                                    pwdMessage.value = { type: 'error', text: '安全警告：当前管理员正在使用默认弱密码 (admin123)，存在系统被入侵的巨大风险！请立即完成修改。' }
+                                    showPwdModal.value = true
+                                }, 1500)
+                            }
+                        } else {
+                            localStorage.removeItem('access_token')
+                        }
+                    } catch (err) {
+                        console.error(err)
+                    }
+                }
+
+                const login = async () => {
+                    loginError.value = ''
+                    const formData = new URLSearchParams()
+                    formData.append('username', loginForm.value.username)
+                    formData.append('password', loginForm.value.password)
+
+                    try {
+                        const res = await fetch('/api/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: formData
+                        })
+                        const data = await res.json()
+
+                        if (res.ok) {
+                            localStorage.setItem('access_token', data.access_token)
+                            isAuthenticated.value = true
+                            loginForm.value.password = '' // clear
+                            // When authenticated, init dashboard
+                            Vue.nextTick(() => {
+                                initCharts()
+                                startAutoRefresh()
+                            })
+                        } else {
+                            loginError.value = data.detail || 'Login failed'
+                        }
+                    } catch (err) {
+                        loginError.value = 'Network error'
+                    }
+                }
+
+                const logout = () => {
+                    localStorage.removeItem('access_token')
+                    isAuthenticated.value = false
+                    stopAutoRefresh()
+                }
+
+                const openPwdModal = () => { showPwdModal.value = true }
+
+                const changePassword = async () => {
+                    pwdMessage.value = null
+                    if (!pwdForm.value.old || !pwdForm.value.new1 || !pwdForm.value.new2) {
+                        pwdMessage.value = { type: 'error', text: '所有密码框均必须填写！' }
+                        return
+                    }
+                    if (pwdForm.value.new1 !== pwdForm.value.new2) {
+                        pwdMessage.value = { type: 'error', text: '两次输入的新密码不一致！' }
+                        return
+                    }
+                    if (pwdForm.value.new1.length < 6) {
+                        pwdMessage.value = { type: 'error', text: '新密码不能少于 6 位有效长度！' }
+                        return
+                    }
+
+                    try {
+                        const res = await fetch('/api/user/password', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', ...getTokenHeaders() },
+                            body: JSON.stringify({ old_password: pwdForm.value.old, new_password: pwdForm.value.new1 })
+                        })
+                        const data = await res.json()
+                        if (res.ok) {
+                            alert(data.message)
+                            showPwdModal.value = false
+                            pwdForm.value = { old: '', new1: '', new2: '' }
+                            logout()
+                        } else {
+                            pwdMessage.value = { type: 'error', text: data.detail || '密码修改请求受到驳回。' }
+                        }
+                    } catch (err) {
+                        pwdMessage.value = { type: 'error', text: '请求失败：本地网络或后端通讯异常。' }
+                    }
+                }
+
+                const clearHistory = async () => {
+                    if (!confirm("此操作将永久清空数据库中所有储存的 CPU、内存、网络等历史运行轨迹数据。\n\n您确定要进行该清理动作吗？")) return
+                    try {
+                        const res = await fetch('/api/system/metrics/history', {
+                            method: 'DELETE',
+                            headers: getTokenHeaders()
+                        })
+                        if (res.ok) {
+                            alert("历史数据已强力清空！")
+                            fetchMetricsHistory()
+                        } else {
+                            const data = await res.json()
+                            alert(`清理失败：${data.message}`)
+                        }
+                    } catch (err) {
+                        alert("清空请求发生网络异常。")
+                    }
+                }
+
+                const getTokenHeaders = () => {
+                    return {
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                    }
+                }
+
+                const initCharts = () => {
+                    if (!document.getElementById('cpuChart')) return
+                    cpuChartInstance = echarts.init(document.getElementById('cpuChart'), 'dark', { renderer: 'canvas' })
+                    memChartInstance = echarts.init(document.getElementById('memChart'), 'dark', { renderer: 'canvas' })
+                    netChartInstance = echarts.init(document.getElementById('netChart'), 'dark', { renderer: 'canvas' })
+
+                    // Transparent background for dark mode charts to blend with tailwind slate-800
+                    const commonOptions = {
+                        backgroundColor: 'transparent',
+                        tooltip: { trigger: 'axis' },
+                        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+                        xAxis: { type: 'time', splitLine: { show: false } },
+                        yAxis: { type: 'value', splitLine: { lineStyle: { color: '#334155' } } },
+                    }
+
+                    const formatBytes = (value) => {
+                        if (value === 0) return '0 B/s';
+                        const k = 1024;
+                        const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+                        const i = Math.floor(Math.log(value) / Math.log(k));
+                        return parseFloat((value / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                    }
+
+                    cpuChartInstance.setOption({
+                        ...commonOptions,
+                        color: ['#6366f1'], // Indigo 500
+                        series: [{ name: 'CPU %', type: 'line', showSymbol: false, areaStyle: { opacity: 0.1 }, data: [] }]
+                    })
+
+                    memChartInstance.setOption({
+                        ...commonOptions,
+                        color: ['#10b981'], // Emerald 500
+                        series: [{ name: 'Mem MB', type: 'line', showSymbol: false, areaStyle: { opacity: 0.1 }, data: [] }]
+                    })
+
+                    netChartInstance.setOption({
+                        ...commonOptions,
+                        color: ['#0ea5e9', '#f43f5e'], // Sky 500, Rose 500
+                        yAxis: {
+                            type: 'value',
+                            splitLine: { lineStyle: { color: '#334155' } },
+                            axisLabel: { formatter: (val) => formatBytes(val) }
+                        },
+                        tooltip: {
+                            trigger: 'axis',
+                            formatter: function (params) {
+                                let res = params[0].axisValueLabel + '<br/>';
+                                params.forEach(function (item) {
+                                    res += item.marker + item.seriesName + ': ' + formatBytes(item.value[1]) + '<br/>';
+                                });
+                                return res;
+                            }
+                        },
+                        legend: { data: ['Sent', 'Recv'], textStyle: { color: '#cbd5e1' } },
+                        series: [
+                            { name: 'Sent', type: 'line', showSymbol: false, data: [] },
+                            { name: 'Recv', type: 'line', showSymbol: false, data: [] }
+                        ]
+                    })
+
+                    window.addEventListener('resize', () => {
+                        cpuChartInstance?.resize()
+                        memChartInstance?.resize()
+                        netChartInstance?.resize()
+                    })
+                }
+
+                const fetchMetricsHistory = async () => {
+                    if (!isAuthenticated.value) return
+                    try {
+                        let url = `/api/system/metrics/history?minutes=${timeRange.value === 'custom' ? 60 : timeRange.value}`
+                        if (timeRange.value === 'custom' && customTime.value.start && customTime.value.end) {
+                            const startIso = new Date(customTime.value.start).toISOString()
+                            const endIso = new Date(customTime.value.end).toISOString()
+                            url = `/api/system/metrics/history?start_time=${startIso}&end_time=${endIso}`
+                        }
+
+                        const res = await fetch(url, {
+                            headers: getTokenHeaders()
+                        })
+                        if (res.status === 401) return logout()
+
+                        const data = await res.json()
+
+                        // Construct time series data arrays
+                        const cpuData = data.timestamps.map((t, i) => [new Date(t), data.cpu[i]])
+                        const memData = data.timestamps.map((t, i) => [new Date(t), data.memory_used_mb[i]])
+                        const netSentData = data.timestamps.map((t, i) => [new Date(t), data.net_sent_speed_bps[i]])
+                        const netRecvData = data.timestamps.map((t, i) => [new Date(t), data.net_recv_speed_bps[i]])
+
+                        cpuChartInstance?.setOption({ series: [{ data: cpuData }] })
+
+                        // Update memory yAxis max to total memory intelligently
+                        memChartInstance?.setOption({
+                            yAxis: { max: Math.ceil(data.memory_total_mb) },
+                            series: [{ data: memData }]
+                        })
+
+                        netChartInstance?.setOption({
+                            series: [
+                                { name: 'Sent', data: netSentData },
+                                { name: 'Recv', data: netRecvData }
+                            ]
+                        })
+
+                    } catch (err) {
+                        console.error("Failed to fetch metrics", err)
+                    }
+                }
+
+                const fetchRealtimeNetwork = async () => {
+                    if (!isAuthenticated.value) return
+                    try {
+                        const resIf = await fetch('/api/network/interfaces', { headers: getTokenHeaders() })
+                        if (resIf.ok) networkInterfaces.value = await resIf.json()
+
+                        const resConn = await fetch('/api/network/connections', { headers: getTokenHeaders() })
+                        if (resConn.ok) networkConnections.value = await resConn.json()
+                    } catch (err) {
+                        console.error("Failed to fetch network real-time data", err)
+                    }
+                }
+
+                const fetchNginxStatus = async () => {
+                    if (!isAuthenticated.value) return
+                    try {
+                        const res = await fetch('/api/nginx/status', { headers: getTokenHeaders() })
+                        if (res.ok) nginxStatus.value = await res.json()
+                    } catch (err) {
+                        console.error("Failed to fetch Nginx status", err)
+                    }
+                }
+
+                const fetchNginxConfig = async () => {
+                    if (!isAuthenticated.value) return
+                    try {
+                        const res = await fetch('/api/nginx/config', { headers: getTokenHeaders() })
+                        if (res.ok) nginxConfig.value = await res.json()
+                    } catch (err) {
+                        console.error("Failed to get config")
+                    }
+                }
+
+                const fetchProcesses = async () => {
+                    if (!isAuthenticated.value) return
+                    try {
+                        const res = await fetch('/api/process/list', { headers: getTokenHeaders() })
+                        if (res.ok) processes.value = await res.json()
+                    } catch (err) {
+                        console.error("Failed to fetch processes")
+                    }
+                }
+
+                const killProcess = async (pid, name) => {
+                    if (!confirm(`!! 危险操作 !!\n您确定要强行结束 ${name} 进程吗 (PID: ${pid})？\n此操作不可逆或致系统关键服务丧失响应。`)) return
+
+                    try {
+                        const res = await fetch(`/api/process/kill/${pid}`, { method: 'POST', headers: getTokenHeaders() })
+                        const data = await res.json()
+                        if (res.ok) {
+                            alert(data.message)
+                            fetchProcesses()
+                        } else {
+                            alert(`执行错误: ${data.detail}`)
+                        }
+                    } catch (err) {
+                        alert("杀进程期间出现本地或网络异常。")
+                    }
+                }
+
+                const saveNginxConfig = async () => {
+                    try {
+                        await fetch('/api/nginx/config', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', ...getTokenHeaders() },
+                            body: JSON.stringify({ log_path: nginxConfig.value.log_path })
+                        })
+                        alert('已保存 Nginx 日志绝对路径。')
+                    } catch (err) {
+                        alert('保存失败。')
+                    }
+                }
+
+                const analyzeNginxLogs = async () => {
+                    if (!isAuthenticated.value || nginxLoading.value) return
+
+                    nginxLoading.value = true
+                    nginxLogResult.value.error = null
+
+                    try {
+                        const res = await fetch('/api/nginx/analyze?lines=5000', { headers: getTokenHeaders() })
+                        const data = await res.json()
+                        if (res.ok && !data.error) {
+                            nginxLogResult.value = data
+                        } else {
+                            nginxLogResult.value.error = data.error || '发生了未知的解析错误。'
+                        }
+                    } catch (err) {
+                        nginxLogResult.value.error = '接口请求断开。'
+                    } finally {
+                        nginxLoading.value = false
+                    }
+                }
+
+                const fetchDocker = async () => {
+                    if (!isAuthenticated.value) return
+                    try {
+                        const res = await fetch('/api/manager/docker/containers', { headers: getTokenHeaders() })
+                        if (res.ok) dockerInfo.value = await res.json()
+                    } catch (err) {
+                        console.error('Failed to get docker info')
+                    }
+                }
+
+                const fetchFiles = async (path) => {
+                    if (!isAuthenticated.value) return
+                    fileError.value = null
+                    try {
+                        const res = await fetch(`/api/manager/fs/list?path=${encodeURIComponent(path)}`, { headers: getTokenHeaders() })
+                        const data = await res.json()
+                        if (res.ok) {
+                            fileItems.value = data.items
+                            currentPath.value = data.current_path
+                            parentPath.value = data.parent_path
+                        } else {
+                            fileError.value = data.detail || 'Access Denied'
+                        }
+                    } catch (err) {
+                        fileError.value = 'Failed to fetch directory'
+                    }
+                }
+
+                const downloadFile = (path) => {
+                    const token = localStorage.getItem('access_token')
+                    // Since download uses standard browser behaviour, we can use window.open but need token
+                    // For a proper secure app we should fetch Blob and trigger download link
+                    fetch(`/api/manager/fs/download?path=${encodeURIComponent(path)}`, { headers: getTokenHeaders() })
+                        .then(res => res.blob())
+                        .then(blob => {
+                            const url = window.URL.createObjectURL(blob)
+                            const a = document.createElement('a')
+                            a.href = url
+                            a.download = path.split('\\').pop().split('/').pop()
+                            document.body.appendChild(a)
+                            a.click()
+                            window.URL.revokeObjectURL(url)
+                            document.body.removeChild(a)
+                        })
+                }
+
+                const deleteFile = async (path, isDir) => {
+                    if (!confirm(`警告：此操作不可逆，确定要从硬盘上强制擦除该${isDir ? '目录及内部所有文件' : '文件'}吗？\n\n${path}`)) return
+                    try {
+                        const res = await fetch(`/api/manager/fs/action`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', ...getTokenHeaders() },
+                            body: JSON.stringify({ action: 'delete', src: path })
+                        })
+                        if (res.ok) {
+                            fetchFiles(currentPath.value)
+                        } else {
+                            const data = await res.json()
+                            alert(data.detail || '删除执行失败。')
+                        }
+                    } catch (err) {
+                        alert('删除请求发送失败。')
+                    }
+                }
+
+                const handleFileUpload = async (event) => {
+                    const file = event.target.files[0]
+                    if (!file) return
+
+                    const formData = new FormData()
+                    formData.append('file', file)
+
+                    try {
+                        const res = await fetch(`/api/manager/fs/upload?path=${encodeURIComponent(currentPath.value)}`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
+                            body: formData
+                        })
+                        if (res.ok) {
+                            alert(`文件 ${file.name} 已成功传送至目标目录！`)
+                            fetchFiles(currentPath.value)
+                        } else {
+                            const data = await res.json()
+                            alert(data.detail || '上传请求被拒绝')
+                        }
+                    } catch (err) {
+                        alert('上传执行失败，可能是文件超限或网络异常。')
+                    } finally {
+                        if (fileUploadInput.value) fileUploadInput.value.value = ''
+                    }
+                }
+
+                const startAutoRefresh = () => {
+                    fetchMetricsHistory()
+                    fetchRealtimeNetwork()
+                    fetchNginxStatus()
+                    fetchProcesses()
+                    fetchDocker()
+
+                    intervalId = setInterval(() => {
+                        fetchMetricsHistory()
+                        fetchRealtimeNetwork()
+                        fetchNginxStatus()
+                    }, 3000)
+
+                    // Processes and Docker don't need to refresh every 3 seconds strictly
+                    setInterval(() => {
+                        if (isAuthenticated.value) {
+                            fetchProcesses()
+                            fetchDocker()
+                        }
+                    }, 10000)
+                }
+
+                const stopAutoRefresh = () => {
+                    if (intervalId) clearInterval(intervalId)
+                }
+
+                onMounted(async () => {
+                    await checkToken()
+                    if (isAuthenticated.value) {
+                        Vue.nextTick(() => {
+                            initCharts()
+                            fetchNginxConfig()
+                            fetchFiles(currentPath.value)
+                            startAutoRefresh()
+                        })
+                    }
+                })
+
+                return {
+                    isAuthenticated,
+                    loginForm,
+                    loginError,
+                    timeRange,
+                    networkInterfaces,
+                    networkConnections,
+                    nginxStatus,
+                    nginxConfig,
+                    nginxLogResult,
+                    nginxLoading,
+                    processes,
+                    dockerInfo,
+                    currentPath,
+                    parentPath,
+                    fileItems,
+                    fileError,
+                    login,
+                    logout,
+                    fetchMetricsHistory,
+                    saveNginxConfig,
+                    analyzeNginxLogs,
+                    fetchProcesses,
+                    killProcess,
+                    fetchDocker,
+                    fetchFiles,
+                    downloadFile,
+                    deleteFile,
+                    showPwdModal,
+                    openPwdModal,
+                    pwdForm,
+                    pwdMessage,
+                    isDefaultPassword,
+                    changePassword,
+                    customTime,
+                    clearHistory,
+                    fileUploadInput,
+                    handleFileUpload,
+                    translateTcpStatus
+                }
+            }
+        }).mount('#app')
+    </script>
+
+</body>
+
+</html>
