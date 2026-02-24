@@ -99,6 +99,7 @@ def get_realtime_metrics():
     """获取实时概览（独立于调度器，直接读取psutil）"""
     mem = psutil.virtual_memory()
     disk = psutil.disk_usage('/')
+    io_counters = psutil.disk_io_counters()
     
     return {
         "cpu_percent": psutil.cpu_percent(interval=None),
@@ -112,7 +113,11 @@ def get_realtime_metrics():
         "disk": {
             "total_gb": round(disk.total / (1024**3), 2),
             "used_gb": round(disk.used / (1024**3), 2),
-            "percent": disk.percent
+            "percent": disk.percent,
+            "io_read_bytes": io_counters.read_bytes if io_counters else 0,
+            "io_write_bytes": io_counters.write_bytes if io_counters else 0,
+            "io_read_time": getattr(io_counters, 'read_time', 0) if io_counters else 0,
+            "io_write_time": getattr(io_counters, 'write_time', 0) if io_counters else 0,
         },
         "boot_time": datetime.fromtimestamp(psutil.boot_time()).isoformat()
     }
