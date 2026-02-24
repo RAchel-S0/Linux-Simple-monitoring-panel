@@ -7,6 +7,10 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 import bcrypt
 
+from database import get_db
+from sqlalchemy.orm import Session
+from models import ConfigStorage
+
 # Retrieve secret key from environment or use a default one (in production, MUST be environment variable)
 SECRET_KEY = os.getenv("SECRET_KEY", "b3c5a6d7e8f90123456789abcdef0123456789abcdef0123456789abcdef0123")
 ALGORITHM = "HS256"
@@ -31,9 +35,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     except ValueError:
         return False
 
-# Hardcoded admin credentials for this standalone panel
-# In a real scenario, this could be stored in DB and hashed
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+# Hardcoded fallback admin credentials for first boot
+ADMIN_USERNAME_FALLBACK = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD_HASH = get_password_hash(os.getenv("ADMIN_PASSWORD", "admin123"))
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -46,7 +49,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -60,7 +63,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     except JWTError:
         raise credentials_exception
         
-    if username != ADMIN_USERNAME:
+    config_user = db.query(ConfigStorage).filter(ConfigStorage.key == "admin_username").first()
+    expected_username = config_user.value if config_user else ADMIN_USERNAME_FALLBACK
+        
+    if username != expected_username:
         raise credentials_exception
         
     return username
