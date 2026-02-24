@@ -8,6 +8,7 @@ from datetime import timedelta
 from database import engine, get_db
 import models
 from apscheduler.schedulers.background import BackgroundScheduler
+from fastapi.middleware.gzip import GZipMiddleware
 import tasks
 
 # Ensure static directories exist
@@ -28,6 +29,7 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown()
 
 app = FastAPI(title="Linux Server Monitor", lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 from routers import system, network, nginx, process, manager
 
