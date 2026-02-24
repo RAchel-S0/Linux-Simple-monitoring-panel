@@ -109,34 +109,121 @@
 
                 <!-- CPU Chart -->
                 <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg">
-                    <h3 class="text-slate-300 font-medium mb-2">核心处理器使用率 (CPU %)</h3>
-                    <div id="cpuChart" class="w-full h-64"></div>
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-slate-300 font-medium">核心处理器使用率 (CPU %)</h3>
+                        <button @click="collapsed.cpu = !collapsed.cpu"
+                            class="text-slate-500 hover:text-white transition">
+                            <svg class="w-4 h-4 transform transition-transform" :class="{ 'rotate-180': collapsed.cpu }"
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div v-show="!collapsed.cpu" id="cpuChart" class="w-full h-64"></div>
                 </div>
 
                 <!-- Memory Chart -->
                 <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg">
-                    <h3 class="text-slate-300 font-medium mb-2">物理内存消耗 (RAM MB)</h3>
-                    <div id="memChart" class="w-full h-64"></div>
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-slate-300 font-medium">物理内存消耗 (RAM MB)</h3>
+                        <button @click="collapsed.mem = !collapsed.mem"
+                            class="text-slate-500 hover:text-white transition">
+                            <svg class="w-4 h-4 transform transition-transform" :class="{ 'rotate-180': collapsed.mem }"
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div v-show="!collapsed.mem" id="memChart" class="w-full h-64"></div>
+                </div>
+
+                <!-- Disk Usage (New) -->
+                <div
+                    class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg lg:col-span-2 flex flex-col justify-center">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-slate-300 font-medium flex items-center gap-2">
+                            <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4">
+                                </path>
+                            </svg>
+                            磁盘空间与 I/O 监控 (大盘)
+                        </h3>
+                        <div class="flex items-center gap-4">
+                            <span class="text-indigo-400 font-mono text-xl">{{ diskInfo?.percent || 0 }}%</span>
+                            <button @click="collapsed.disk = !collapsed.disk"
+                                class="text-slate-500 hover:text-white transition">
+                                <svg class="w-4 h-4 transform transition-transform"
+                                    :class="{ 'rotate-180': collapsed.disk }" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div v-show="!collapsed.disk">
+                        <div class="w-full bg-slate-900 rounded-full h-6 mb-3 border border-slate-700">
+                            <div class="bg-indigo-500 h-6 rounded-full transition-all duration-1000 relative overflow-hidden"
+                                :style="{ width: (diskInfo?.percent || 0) + '%' }">
+                                <div class="absolute inset-0 bg-white/20"
+                                    style="background-image: linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent); background-size: 1rem 1rem;">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between text-sm text-slate-400 font-mono">
+                            <span>已用: {{ diskInfo?.used_gb || 0 }} GB</span>
+                            <span>读: {{ formatBytes(diskInfo?.read_speed || 0) }} | 延: {{ diskInfo?.read_time || 0
+                                }}ms</span>
+                            <span>写: {{ formatBytes(diskInfo?.write_speed || 0) }} | 延: {{ diskInfo?.write_time || 0
+                                }}ms</span>
+                            <span>总共: {{ diskInfo?.total_gb || 0 }} GB</span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Network Chart -->
                 <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg lg:col-span-2">
-                    <h3 class="text-slate-300 font-medium mb-2">全网卡总流量 (Bytes/s)</h3>
-                    <div id="netChart" class="w-full h-64"></div>
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-slate-300 font-medium">全网卡总流量 (Bytes/s)</h3>
+                        <button @click="collapsed.netChart = !collapsed.netChart"
+                            class="text-slate-500 hover:text-white transition">
+                            <svg class="w-4 h-4 transform transition-transform"
+                                :class="{ 'rotate-180': collapsed.netChart }" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div v-show="!collapsed.netChart" id="netChart" class="w-full h-64 mt-2"></div>
                 </div>
 
                 <!-- Advanced Network Stats -->
                 <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg lg:col-span-2">
-                    <h3 class="text-slate-300 font-medium mb-4 flex items-center gap-2">
-                        <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z">
-                            </path>
-                        </svg>
-                        网络状态
-                    </h3>
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-slate-300 font-medium flex items-center gap-2">
+                            <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z">
+                                </path>
+                            </svg>
+                            网络状态
+                        </h3>
+                        <button @click="collapsed.netStats = !collapsed.netStats"
+                            class="text-slate-500 hover:text-white transition">
+                            <svg class="w-4 h-4 transform transition-transform"
+                                :class="{ 'rotate-180': collapsed.netStats }" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                    </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div v-show="!collapsed.netStats" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <!-- TCP Connections Map -->
                         <div>
                             <div class="flex justify-between items-center mb-2">
@@ -198,18 +285,29 @@
                             </svg>
                             Nginx 运行状态/日志分析
                         </h3>
-                        <!-- Status indicator -->
-                        <div class="flex items-center gap-2">
-                            <span :class="nginxStatus.running ? 'bg-emerald-500' : 'bg-rose-500'"
-                                class="w-2.5 h-2.5 rounded-full animate-pulse"></span>
-                            <span class="text-sm font-mono"
-                                :class="nginxStatus.running ? 'text-emerald-400' : 'text-rose-400'">
-                                {{ nginxStatus.running ? `运行中 (PID: ${nginxStatus.pid})` : '已停止' }}
-                            </span>
+                        <div class="flex items-center gap-4">
+                            <!-- Status indicator -->
+                            <div class="flex items-center gap-2">
+                                <span :class="nginxStatus.running ? 'bg-emerald-500' : 'bg-rose-500'"
+                                    class="w-2.5 h-2.5 rounded-full animate-pulse"></span>
+                                <span class="text-sm font-mono"
+                                    :class="nginxStatus.running ? 'text-emerald-400' : 'text-rose-400'">
+                                    {{ nginxStatus.running ? `运行中 (PID: ${nginxStatus.pid})` : '已停止' }}
+                                </span>
+                            </div>
+                            <button @click="collapsed.nginx = !collapsed.nginx"
+                                class="text-slate-500 hover:text-white transition">
+                                <svg class="w-4 h-4 transform transition-transform"
+                                    :class="{ 'rotate-180': collapsed.nginx }" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div v-show="!collapsed.nginx" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <!-- Configuration Form -->
                         <div class="lg:col-span-1 space-y-4">
                             <div>
@@ -218,9 +316,7 @@
                                     <input type="text" v-model="nginxConfig.log_path"
                                         class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none flex-grow">
                                     <button @click="saveNginxConfig"
-                                        class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-sm transition shrink-0">
-                                        保存
-                                    </button>
+                                        class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-sm transition shrink-0">保存</button>
                                 </div>
                             </div>
                             <button @click="analyzeNginxLogs" :disabled="nginxLoading"
@@ -237,8 +333,7 @@
                             </button>
                             <p v-if="nginxLogResult.error" class="text-rose-400 text-xs">{{ nginxLogResult.error }}</p>
                             <p v-if="nginxLogResult.total_analyzed_lines > 0" class="text-slate-400 text-xs">
-                                成功抽取并分析了文件末尾 {{ nginxLogResult.total_analyzed_lines }} 条记录。
-                            </p>
+                                成功抽取并分析了文件末尾 {{ nginxLogResult.total_analyzed_lines }} 条记录。</p>
                         </div>
 
                         <!-- Top IPs Table -->
@@ -266,8 +361,7 @@
                                             <td class="px-4 py-2 text-xs">
                                                 <span v-if="row.country !== 'Unknown'" class="mr-1">🌍</span>
                                                 {{ row.country === 'Unknown' ? '未知' : row.country }}<span
-                                                    v-if="row.city && row.city !== 'Unknown'">，{{
-                                                    row.city }}</span>
+                                                    v-if="row.city && row.city !== 'Unknown'">，{{ row.city }}</span>
                                             </td>
                                             <td class="px-4 py-2 text-xs truncate max-w-[120px]" :title="row.isp">{{
                                                 row.isp }}</td>
@@ -292,15 +386,26 @@
                             </svg>
                             系统进程管理 (按物理内存倒序 Top 100)
                         </h3>
-                        <button @click="fetchProcesses" class="p-2 text-slate-400 hover:text-white transition">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
-                                </path>
-                            </svg>
-                        </button>
+                        <div class="flex items-center gap-2">
+                            <button @click="fetchProcesses" class="p-2 text-slate-400 hover:text-white transition">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                                    </path>
+                                </svg>
+                            </button>
+                            <button @click="collapsed.process = !collapsed.process"
+                                class="text-slate-500 hover:text-white transition">
+                                <svg class="w-4 h-4 transform transition-transform"
+                                    :class="{ 'rotate-180': collapsed.process }" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
-                    <div
+                    <div v-show="!collapsed.process"
                         class="overflow-x-auto max-h-[400px] overflow-y-auto custom-scrollbar border border-slate-700 rounded-lg">
                         <table class="w-full text-sm text-left text-slate-300">
                             <thead class="text-xs text-slate-400 bg-slate-900 sticky top-0 z-10">
@@ -481,6 +586,45 @@
             </div>
         </div>
 
+        <!-- Password Change Modal -->
+        <div v-if="showPwdModal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
+            <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-xl w-full max-w-sm">
+                <h3 class="text-xl font-bold text-white mb-4">修改管理员口令与身份</h3>
+                <div class="space-y-4">
+                    <div v-if="pwdMessage" :class="pwdMessage.type === 'error' ? 'text-rose-400' : 'text-emerald-400'"
+                        class="text-sm">
+                        {{ pwdMessage.text }}
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-300 mb-1">系统当前密码</label>
+                        <input type="password" v-model="pwdForm.old"
+                            class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-300 mb-1">设置新用户名</label>
+                        <input type="text" v-model="pwdForm.username"
+                            class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-300 mb-1">输入新密码 (至少6位)</label>
+                        <input type="password" v-model="pwdForm.new1"
+                            class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-300 mb-1">再次确认新密码</label>
+                        <input type="password" v-model="pwdForm.new2"
+                            class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div class="flex justify-end gap-3 mt-6">
+                        <button @click="showPwdModal = false"
+                            class="px-4 py-2 text-slate-300 hover:text-white transition">取消</button>
+                        <button @click="changePassword"
+                            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded transition shadow">确认修改</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <script>
@@ -496,9 +640,26 @@
                 const fileUploadInput = ref(null)
 
                 const showPwdModal = ref(false)
-                const pwdForm = ref({ old: '', new1: '', new2: '' })
+                const currentUsername = ref('')
+                const pwdForm = ref({ old: '', username: '', new1: '', new2: '' })
                 const pwdMessage = ref(null)
                 const isDefaultPassword = ref(false)
+
+                const collapsed = ref({
+                    cpu: false, mem: false, disk: false, netChart: false, netStats: false,
+                    nginx: false, process: false, docker: false, files: false
+                })
+
+                const formatBytes = (value) => {
+                    if (!value || value === 0) return '0 B/s';
+                    const k = 1024;
+                    const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+                    const i = Math.floor(Math.log(Math.abs(value)) / Math.log(k));
+                    return parseFloat((value / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                }
+
+                const diskInfo = ref({ total_gb: 0, used_gb: 0, percent: 0, read_speed: 0, write_speed: 0, read_time: 0, write_time: 0 })
+                const diskPrev = ref(null)
 
                 const networkInterfaces = ref([])
                 const networkConnections = ref({ status_counts: {}, total_connections: 0, rate: { new_per_3s: 0, closed_per_3s: 0 } })
@@ -550,9 +711,12 @@
                             isAuthenticated.value = true
                             const data = await res.json()
                             isDefaultPassword.value = data.is_default_password
+                            currentUsername.value = data.username || 'admin'
+                            pwdForm.value.username = currentUsername.value
+
                             if (isDefaultPassword.value) {
                                 setTimeout(() => {
-                                    pwdMessage.value = { type: 'error', text: '安全警告：当前管理员正在使用默认弱密码 (admin123)，存在系统被入侵的巨大风险！请立即完成修改。' }
+                                    pwdMessage.value = { type: 'error', text: '安全警告：当前管理员正在使用系统默认弱密码或默认用户名，存在被入侵的巨大风险！请立即完成修改。' }
                                     showPwdModal.value = true
                                 }, 1500)
                             }
@@ -582,6 +746,10 @@
                             localStorage.setItem('access_token', data.access_token)
                             isAuthenticated.value = true
                             loginForm.value.password = '' // clear
+
+                            // Check token to load username and trigger default password warning immediately
+                            await checkToken()
+
                             // When authenticated, init dashboard
                             Vue.nextTick(() => {
                                 initCharts()
@@ -601,12 +769,15 @@
                     stopAutoRefresh()
                 }
 
-                const openPwdModal = () => { showPwdModal.value = true }
+                const openPwdModal = () => {
+                    pwdForm.value.username = currentUsername.value || 'admin'
+                    showPwdModal.value = true
+                }
 
                 const changePassword = async () => {
                     pwdMessage.value = null
-                    if (!pwdForm.value.old || !pwdForm.value.new1 || !pwdForm.value.new2) {
-                        pwdMessage.value = { type: 'error', text: '所有密码框均必须填写！' }
+                    if (!pwdForm.value.old || !pwdForm.value.new1 || !pwdForm.value.new2 || !pwdForm.value.username) {
+                        pwdMessage.value = { type: 'error', text: '所有输入框均必须填写完整！' }
                         return
                     }
                     if (pwdForm.value.new1 !== pwdForm.value.new2) {
@@ -622,19 +793,23 @@
                         const res = await fetch('/api/user/password', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', ...getTokenHeaders() },
-                            body: JSON.stringify({ old_password: pwdForm.value.old, new_password: pwdForm.value.new1 })
+                            body: JSON.stringify({
+                                old_password: pwdForm.value.old,
+                                new_username: pwdForm.value.username,
+                                new_password: pwdForm.value.new1
+                            })
                         })
                         const data = await res.json()
                         if (res.ok) {
                             alert(data.message)
                             showPwdModal.value = false
-                            pwdForm.value = { old: '', new1: '', new2: '' }
+                            pwdForm.value = { old: '', username: '', new1: '', new2: '' }
                             logout()
                         } else {
-                            pwdMessage.value = { type: 'error', text: data.detail || '密码修改请求受到驳回。' }
+                            pwdMessage.value = { type: 'error', text: data.detail || '信息修改请求被驳回。' }
                         }
                     } catch (err) {
-                        pwdMessage.value = { type: 'error', text: '请求失败：本地网络或后端通讯异常。' }
+                        pwdMessage.value = { type: 'error', text: '请求失败：后台验证挂起或网络异常。' }
                     }
                 }
 
@@ -676,14 +851,6 @@
                         grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
                         xAxis: { type: 'time', splitLine: { show: false } },
                         yAxis: { type: 'value', splitLine: { lineStyle: { color: '#334155' } } },
-                    }
-
-                    const formatBytes = (value) => {
-                        if (value === 0) return '0 B/s';
-                        const k = 1024;
-                        const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
-                        const i = Math.floor(Math.log(value) / Math.log(k));
-                        return parseFloat((value / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
                     }
 
                     cpuChartInstance.setOption({
@@ -770,6 +937,34 @@
 
                     } catch (err) {
                         console.error("Failed to fetch metrics", err)
+                    }
+                }
+
+                const fetchRealtimeSystem = async () => {
+                    if (!isAuthenticated.value) return
+                    try {
+                        const res = await fetch('/api/system/metrics/realtime', { headers: getTokenHeaders() })
+                        if (res.ok) {
+                            const data = await res.json()
+                            const now = Date.now()
+                            if (diskPrev.value && data.disk.io_read_bytes !== undefined) {
+                                const timeDiff = (now - diskPrev.value.timestamp) / 1000
+                                if (timeDiff > 0) {
+                                    data.disk.read_speed = (data.disk.io_read_bytes - diskPrev.value.io_read_bytes) / timeDiff
+                                    data.disk.write_speed = (data.disk.io_write_bytes - diskPrev.value.io_write_bytes) / timeDiff
+
+                                    const rTimeDiff = data.disk.io_read_time - diskPrev.value.io_read_time
+                                    const wTimeDiff = data.disk.io_write_time - diskPrev.value.io_write_time
+
+                                    data.disk.read_time = Math.max(0, rTimeDiff / timeDiff).toFixed(1)
+                                    data.disk.write_time = Math.max(0, wTimeDiff / timeDiff).toFixed(1)
+                                }
+                            }
+                            diskInfo.value = data.disk
+                            diskPrev.value = { ...data.disk, timestamp: now }
+                        }
+                    } catch (err) {
+                        console.error("Failed to fetch real-time disk", err)
                     }
                 }
 
@@ -962,6 +1157,7 @@
                 const startAutoRefresh = () => {
                     fetchMetricsHistory()
                     fetchRealtimeNetwork()
+                    fetchRealtimeSystem()
                     fetchNginxStatus()
                     fetchProcesses()
                     fetchDocker()
@@ -969,6 +1165,7 @@
                     intervalId = setInterval(() => {
                         fetchMetricsHistory()
                         fetchRealtimeNetwork()
+                        fetchRealtimeSystem()
                         fetchNginxStatus()
                     }, 3000)
 
@@ -1014,6 +1211,7 @@
                     parentPath,
                     fileItems,
                     fileError,
+                    diskInfo,
                     login,
                     logout,
                     fetchMetricsHistory,
@@ -1035,7 +1233,9 @@
                     clearHistory,
                     fileUploadInput,
                     handleFileUpload,
-                    translateTcpStatus
+                    translateTcpStatus,
+                    collapsed,
+                    formatBytes
                 }
             }
         }).mount('#app')
