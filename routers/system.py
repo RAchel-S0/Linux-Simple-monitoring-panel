@@ -2,9 +2,14 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 import psutil
+import subprocess
+import os
+import re
+import json
+from pydantic import BaseModel
 
 from database import get_db
-from models import SystemMetricsHistory
+from models import SystemMetricsHistory, ConfigStorage
 from auth import get_current_user
 
 router = APIRouter(
@@ -12,6 +17,9 @@ router = APIRouter(
     tags=["system"],
     dependencies=[Depends(get_current_user)]
 )
+
+class LayoutConfig(BaseModel):
+    layout: dict
 
 @router.get("/metrics/history")
 def get_metrics_history(
@@ -121,3 +129,87 @@ def get_realtime_metrics():
         },
         "boot_time": datetime.fromtimestamp(psutil.boot_time()).isoformat()
     }
+
+@router.get("/config/layout")
+def get_layout_config(db: Session = Depends(get_db)):
+    config = db.query(ConfigStorage).filter(ConfigStorage.key == "dashboard_layout").first()
+    if config:
+        try:
+            return json.loads(config.value)
+        except:
+            return {}
+    return {}
+
+@router.post("/config/layout")
+def save_layout_config(layout_data: LayoutConfig, db: Session = Depends(get_db)):
+    config = db.query(ConfigStorage).filter(ConfigStorage.key == "dashboard_layout").first()
+    val = json.dumps(layout_data.layout)
+    if config:
+        config.value = val
+    else:
+        new_config = ConfigStorage(key="dashboard_layout", value=val)
+        db.add(new_config)
+    db.commit()
+    return {"message": "Layout saved successfully"}
+
+@router.get("/logs")
+def get_system_logs(severity: str = "ALL", lines: int = 50):
+    logs = []
+    # Attempt 1: journalctl (Standard on systemd)
+    try:
+        priority_arg = []
+        if severity == "ERROR":
+            priority_arg = ["-p", "0..3"]
+        elif severity == "WARNING":
+            priority_arg = ["-p", "4"]
+        elif severity == "INFO":
+            priority_arg = ["-p", "5..6"]
+            
+        cmd = ["journalctl", "--no-pager", "-n", str(lines), "-o", "json"] + priority_arg
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        
+        if result.returncode == 0 and result.stdout.strip():
+            for line in result.stdout.strip().split('\n'):
+                try:
+                    entry = json.loads(line)
+                    ts = int(entry.get("__REALTIME_TIMESTAMP", 0)) / 1000000
+                    dt = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S") if ts else ""
+                    msg = entry.get("MESSAGE", "")
+                    syslog_id = entry.get("SYSLOG_IDENTIFIER", entry.get("_COMM", "kernel"))
+                    logs.append({"time": dt, "source": syslog_id, "message": msg})
+                except:
+                    continue
+            logs.reverse() # latest first
+            return {"logs": logs, "source": "journalctl"}
+    except Exception:
+        pass
+        
+    # Attempt 2: Direct file read fallback
+    log_file = "/var/log/syslog" if os.path.exists("/var/log/syslog") else "/var/log/messages"
+    if os.path.exists(log_file):
+        try:
+            tail_cmd = ["tail", "-n", "2000", log_file]
+            res = subprocess.run(tail_cmd, capture_output=True, text=True, timeout=5)
+            if res.returncode == 0:
+                for line in reversed(res.stdout.strip().split('\n')):
+                    if len(logs) >= lines:
+                        break
+                    line_lower = line.lower()
+                    if severity == "ERROR" and not any(k in line_lower for k in ["err", "fail", "crit", "fatal"]):
+                        continue
+                    if severity == "WARNING" and "warn" not in line_lower:
+                        continue
+                    if severity == "INFO" and any(k in line_lower for k in ["err", "fail", "crit", "fatal", "warn"]):
+                        continue
+                        
+                    match = re.match(r'^([A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2})\s+\S+\s+([^:]+):\s+(.*)$', line)
+                    if match:
+                        date_str, source, msg = match.groups()
+                        logs.append({"time": date_str, "source": source, "message": msg})
+                    else:
+                        logs.append({"time": "", "source": "unknown", "message": line})
+                return {"logs": logs, "source": log_file}
+        except:
+            pass
+            
+    return {"logs": [{"time": "", "source": "System", "message": "暂无权限读取当前系统的内核或业务日志，请检查 journald/syslog 配置。"}], "source": "none"}
